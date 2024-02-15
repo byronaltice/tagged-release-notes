@@ -1,0 +1,22 @@
+{
+  "name": "tagged-release-notes",
+  "version": "1.0.0",
+  "description": "Provided a source tag and a destination tag in git, compile all github release notes into one document based on the tags merged into the destination, but not the source, effectively giving a changelog for your stable releases.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/byronaltice/tagged-release-notes"
+  },
+  "author": "byronaltice",
+  "license": "ISC",
+  "bin": {
+    "tagnotes": "./index.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.7",
+    "dotenv": "^16.4.4"
+  }
+}
