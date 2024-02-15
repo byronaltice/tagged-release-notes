@@ -2,8 +2,6 @@ require('dotenv').config();
 const { execSync } = require('child_process');
 const axios = require('axios');
 
-const { GITHUB_TOKEN } = { ...process.env };
-
 const args = process.argv.slice(2); // Skip the first two elements
 
 const sourceTag = args[0];
@@ -68,7 +66,7 @@ const execCommand = (command) => {
 const fetchReleaseNotes = async (tag) => {
   try {
     const response = await axios.get(`https://api.github.com/repos/${getRepoOwner()}/${getRepoName()}/releases/tags/${tag}`, {
-      headers: { Authorization: `Bearer ${GITHUB_TOKEN}` },
+      headers: { Authorization: `Bearer ${getGithubToken()}` },
     });
     return { tag, name: response.data.name, body: response.data.body };
   } catch (error) {
@@ -77,21 +75,51 @@ const fetchReleaseNotes = async (tag) => {
   }
 };
 
+// Use this function to determine whether any tags in the array are not associated with any releases in github
+const findOrphanedTags = async (tags) => {
+  const releases = await fetchReleases();
+  const releaseTags = releases.map(release => release.tag_name);
+  console.log('RT', releaseTags);
+  return tags.filter(tag => !releaseTags.includes(tag));
+}
+
+const fetchReleases = async () => {
+  const config = {
+    headers: { Authorization: `token ${getGithubToken()}` },
+    url: `https://api.github.com/repos/${getRepoOwner()}/${getRepoName()}/releases`,
+    method: 'get',
+  };
+
+  try {
+    const response = await axios(config);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching releases:', error);
+    return [];
+  }
+}
+
 const main = async () => {
-  // Fetch tags merged into start and end tags
-  const endTagMerged = execCommand(`git tag --merged ${endTag}`);
-  const startTagMerged = execCommand(`git tag --merged ${startTag}`);
+  const targetTagMerged = execCommand(`git tag --merged ${targetTag}`);
+  const sourceTagMerged = execCommand(`git tag --merged ${sourceTag}`);
+  // Determine tags exclusive to the target tag
+  const exclusiveTags = targetTagMerged.filter(tag => !sourceTagMerged.includes(tag));
+  console.debug('Exclusive tags: ', exclusiveTags);
+  const orphanedTags = await findOrphanedTags(exclusiveTags);
 
-  // Determine tags exclusive to the end tag
-  const exclusiveTags = endTagMerged.filter(tag => !startTagMerged.includes(tag));
+  console.warn('These tags were not associated with any releases, and will be skipped: ', orphanedTags);
 
-  // Fetch release notes for the tags exclusive to the end tag
-  const releaseNotesPromises = exclusiveTags.map(tag => fetchReleaseNotes(tag));
+  const exclusiveNotOrphanedTags = exclusiveTags.filter(tag => !orphanedTags.includes(tag));
+
+  // Fetch release notes for the tags exclusive to the target tag
+  const releaseNotesPromises = exclusiveNotOrphanedTags.map(tag => fetchReleaseNotes(tag));
   const releaseNotes = await Promise.all(releaseNotesPromises);
 
   // Log the release notes
   releaseNotes.forEach(release => {
-    if (release) {
+    if (release && release.name === release.tag) {
+      console.log(`${release.name}\n ${release.body}\n`);
+    } else if (release) {
       console.log(`${release.name} (${release.tag})\n ${release.body}\n`);
     }
   });
